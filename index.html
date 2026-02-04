@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>时间表达练习</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f7f6; display: flex; justify-content: center; padding: 20px; }
+        .container { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 100%; max-width: 850px; }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #7f8c8d; margin-bottom: 25px; font-size: 0.95rem; line-height: 1.5; }
+        
+        .quiz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        @media (max-width: 768px) { .quiz-grid { grid-template-columns: 1fr; } }
+
+        .quiz-item { 
+            display: flex; align-items: center; padding: 12px; border: 1px solid #edf2f7; 
+            border-radius: 12px; background: #fff; transition: 0.2s;
+        }
+        .quiz-item:focus-within { border-color: #3498db; background-color: #f0f9ff; }
+        
+        .index { width: 25px; font-weight: bold; color: #bdc3c7; font-size: 0.9rem; }
+        .question-box { flex: 1; margin-left: 5px; }
+        .question { display: block; font-size: 1rem; color: #2c3e50; font-weight: 600; }
+        
+        .clock-canvas { background: #fff; margin: 0 10px; border-radius: 50%; }
+        
+        .input-group { display: flex; flex-direction: column; align-items: flex-end; }
+        input[type="text"] { 
+            width: 75px; padding: 8px; border: 2px solid #cbd5e0; 
+            border-radius: 6px; text-align: center; font-size: 1.1rem; font-weight: bold; 
+            transition: all 0.2s;
+        }
+        input[type="text"]:focus { border-color: #3498db; outline: none; box-shadow: 0 0 5px rgba(52,152,219,0.3); }
+        
+        .feedback { font-size: 0.75rem; font-weight: bold; margin-top: 3px; height: 15px; }
+        .correct { color: #48bb78; }
+        .wrong { color: #f56565; }
+
+        .controls { 
+            margin-top: 30px; text-align: center; border-top: 2px solid #edf2f7; 
+            padding-top: 25px; position: sticky; bottom: 0; background: white; padding-bottom: 10px;
+        }
+        button { padding: 12px 35px; font-size: 1rem; cursor: pointer; border: none; border-radius: 8px; font-weight: bold; transition: 0.3s; }
+        #submit-btn { background-color: #3498db; color: white; margin-right: 15px; }
+        #submit-btn:hover { background-color: #2980b9; }
+        #reset-btn { background-color: #a0aec0; color: white; }
+        
+        #result-summary { margin-top: 15px; text-align:center; font-size: 1.5rem; font-weight: bold; color: #2d3748; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>⏰ 时间表达练习</h1>
+    <div class="subtitle">
+        键盘输入时间（如 <b>3:15</b>），完成后按 <b>Enter ↵</b> 进入下一题
+    </div>
+
+    <div id="quiz-container" class="quiz-grid"></div>
+    
+    <div class="controls">
+        <button id="submit-btn" onclick="checkAnswers()">提交批改</button>
+        <button id="reset-btn" onclick="generateQuiz()">更换题目</button>
+        <div id="result-summary"></div>
+    </div>
+</div>
+
+<script>
+    let questions = [];
+
+    function drawClock(canvasId, hour, minute) {
+        const canvas = document.getElementById(canvasId);
+        const ctx = canvas.getContext('2d');
+        const radius = canvas.height / 2;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.translate(radius, radius);
+        const r = radius * 0.9;
+
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, 2 * Math.PI);
+        ctx.fillStyle = 'white';
+        ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = "#999";
+        ctx.font = "10px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for(let n=3; n<=12; n+=3) {
+            const ang = n * Math.PI / 6;
+            ctx.fillText(n, r*0.75 * Math.sin(ang), -r*0.75 * Math.cos(ang));
+        }
+
+        const hourAngle = (hour % 12) * Math.PI / 6 + (minute * Math.PI / (6 * 60));
+        const minuteAngle = minute * Math.PI / 30;
+
+        drawHand(ctx, hourAngle, r * 0.5, 4, '#2d3748');
+        drawHand(ctx, minuteAngle, r * 0.8, 2, '#3498db');
+        
+        ctx.beginPath();
+        ctx.arc(0, 0, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = '#333';
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function drawHand(ctx, pos, length, width, color) {
+        ctx.beginPath();
+        ctx.lineWidth = width;
+        ctx.lineCap = "round";
+        ctx.strokeStyle = color;
+        ctx.moveTo(0, 0);
+        ctx.rotate(pos);
+        ctx.lineTo(0, -length);
+        ctx.stroke();
+        ctx.rotate(-pos);
+    }
+
+    function handleEnter(event, index) {
+        if (event.key === 'Enter') {
+            event.preventDefault(); // 防止意外提交表单
+            const nextInput = document.getElementById(`q${index + 1}`);
+            if (nextInput) {
+                nextInput.focus();
+            } else {
+                // 如果是最后一题，直接提交
+                checkAnswers();
+            }
+        }
+    }
+
+    function generateQuiz() {
+        const container = document.getElementById('quiz-container');
+        const summary = document.getElementById('result-summary');
+        container.innerHTML = '';
+        summary.innerHTML = '';
+        questions = [];
+
+        const types = ['quarter past', 'quarter to', 'half past'];
+
+        for (let i = 0; i < 20; i++) {
+            const type = types[Math.floor(Math.random() * types.length)];
+            const hour = Math.floor(Math.random() * 12) + 1;
+            let qText = "";
+            let targetHour, targetMin;
+
+            if (type === 'quarter past') {
+                qText = `quarter past ${hour}`;
+                targetHour = hour; targetMin = 15;
+            } else if (type === 'quarter to') {
+                qText = `quarter to ${hour}`;
+                targetHour = (hour - 1 === 0) ? 12 : hour - 1;
+                targetMin = 45;
+            } else {
+                qText = `half past ${hour}`;
+                targetHour = hour; targetMin = 30;
+            }
+
+            questions.push({ ansH: targetHour, ansM: targetMin.toString().padStart(2, '0') });
+
+            const div = document.createElement('div');
+            div.className = 'quiz-item';
+            div.innerHTML = `
+                <span class="index">${i + 1}</span>
+                <div class="question-box">
+                    <span class="question">${qText}</span>
+                </div>
+                <canvas id="clock${i}" class="clock-canvas" width="80" height="80"></canvas>
+                <div class="input-group">
+                    <input type="text" placeholder="H:MM" id="q${i}" onkeydown="handleEnter(event, ${i})">
+                    <span class="feedback" id="f${i}"></span>
+                </div>
+            `;
+            container.appendChild(div);
+            drawClock(`clock${i}`, targetHour, targetMin);
+        }
+        // 自动聚焦第一题
+        setTimeout(() => document.getElementById('q0').focus(), 100);
+    }
+
+    function checkAnswers() {
+        let score = 0;
+        questions.forEach((q, i) => {
+            const inputEl = document.getElementById(`q${i}`);
+            const feedback = document.getElementById(`f${i}`);
+            const val = inputEl.value.trim().replace('：', ':');
+            
+            const parts = val.split(':');
+            const userH = parseInt(parts[0]);
+            const userM = parts[1];
+
+            if (userH === q.ansH && userM === q.ansM) {
+                feedback.innerHTML = '✓ 正确';
+                feedback.className = 'feedback correct';
+                score++;
+            } else {
+                feedback.innerHTML = `✗ 答案 ${q.ansH}:${q.ansM}`;
+                feedback.className = 'feedback wrong';
+            }
+        });
+        document.getElementById('result-summary').innerHTML = `得分: ${score} / 20`;
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }
+
+    window.onload = generateQuiz;
+</script>
+
+</body>
+</html>
